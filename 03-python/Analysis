@@ -63,3 +63,148 @@
 Прості відсотки та хі-квадрат не пояснюють, *чому* клієнти йдуть, бо фактори перетинаються. Для контролю конфаундерів застосовано логістичну регресію на всіх предикторах (N = 9 995): **McFadden pseudo-R² = 0,263, AUC = 0,834, 5-fold CV AUC = 0,832 ± 0,008, усі VIF < 1,5**.
 
 Після контролю інших змінних значущими драйверами лишилися **Вік (OR = 2,11 на 1 SD), активність (OR = 0,33), 2 продукти проти 1 (OR = 0,21), 3+ продукти проти 1 (OR = 16,5), Німеччина проти Франції (OR = 2,59) і Чоловік проти Жінки (OR = 0,59)**. **Баланс, картка, зарплата й Tenure — незначущі.** Показово: баланс здавався важливим окремо, але втратив значущість після додавання географії — німецькі клієнти мають і високий баланс, і високий відтік, тобто конфаундером була географія.
+Python code: 
+import pandas as pd, numpy as np
+import matplotlib.pyplot as plt, seaborn as sns
+from scipy.stats import chi2_contingency, mannwhitneyu
+
+# --- Завантаження даних (замініть шлях; файл Bank_CLEANED.csv) ---
+df = pd.read_csv('Bank_CLEANED.csv')
+
+# Перевірка та перетворення числових стовпців,
+# якщо у файлі значення записані з комами як роздільниками тисяч
+for c in ['Balance', 'EstimatedSalary']:
+    if df[c].dtype == object:
+        df[c] = pd.to_numeric(
+            df[c].astype(str).str.replace(',', '', regex=False),
+            errors='coerce'
+        )
+
+N = len(df)
+print(f'N={N}, загальний рівень відтоку={df.Exited.mean()*100:.2f}%')
+
+
+def chi2_report(cat, data=df):
+    ct = pd.crosstab(data[cat], data.Exited)
+    chi2, p, dof, _ = chi2_contingency(ct)
+    V = np.sqrt(chi2 / (len(data) * (min(ct.shape) - 1)))
+    return ct, chi2, p, V
+
+
+# ===== H1: Кількість продуктів =====
+df['OneProduct'] = (df.NumOfProducts == 1).astype(int)
+
+ct, chi2, p, V = chi2_report('OneProduct')
+
+rate = df.groupby('NumOfProducts').Exited.mean() * 100
+
+print(
+    f'\nH1: 1 продукт={df[df.OneProduct==1].Exited.mean()*100:.2f}% '
+    f'vs 2+ продукти={df[df.OneProduct==0].Exited.mean()*100:.2f}% '
+    f'| хі-квадрат={chi2:.1f}, p={p:.2e}, V={V:.3f}'
+)
+
+a = df[(df.OneProduct == 1) & (df.Exited == 1)].Tenure
+b = df[(df.OneProduct == 0) & (df.Exited == 1)].Tenure
+
+print(
+    f'Перевірка швидкості відтоку (Tenure серед клієнтів, '
+    f'які пішли): MWU p={mannwhitneyu(a, b).pvalue:.3f}'
+)
+
+fig, ax = plt.subplots(1, 2, figsize=(12, 4))
+
+rate.plot(
+    kind='bar',
+    ax=ax[0],
+    color='steelblue'
+)
+
+ax[0].set_title('Відтік залежно від кількості продуктів, %')
+ax[0].set_ylabel('%')
+ax[0].set_xlabel('Кількість продуктів')
+
+sns.boxplot(
+    data=df[df.Exited == 1],
+    x='OneProduct',
+    y='Tenure',
+    ax=ax[1]
+)
+
+ax[1].set_title(
+    'Tenure клієнтів, які пішли: 0 = 2+ продукти, 1 = 1 продукт'
+)
+ax[1].set_xlabel('Один продукт')
+ax[1].set_ylabel('Tenure')
+
+plt.tight_layout()
+plt.savefig('h1_churn_by_products.png', dpi=150, bbox_inches='tight')
+plt.show()
+
+
+
+# ===== H2: Активність клієнта =====
+ct, chi2, p, V = chi2_report('IsActiveMember')
+
+print(
+    f'\nH2: неактивні={df[df.IsActiveMember==0].Exited.mean()*100:.2f}% '
+    f'vs активні={df[df.IsActiveMember==1].Exited.mean()*100:.2f}% '
+    f'| хі-квадрат={chi2:.1f}, p={p:.2e}, V={V:.3f}'
+)
+
+(
+    df.groupby('IsActiveMember').Exited.mean() * 100
+).plot(
+    kind='bar',
+    color=['tomato', 'seagreen']
+)
+
+plt.title('Відтік: неактивні (0) vs активні (1), %')
+plt.ylabel('%')
+plt.xlabel('Статус активності')
+plt.xticks(
+    ticks=[0, 1],
+    labels=['Неактивні', 'Активні'],
+    rotation=0
+)
+plt.savefig('h2_churn_by_products.png', dpi=150, bbox_inches='tight')
+plt.show()
+
+
+# ===== H3: Високий баланс та наявність кредитної картки =====
+
+# Вибираємо клієнтів із балансом 100 000 або більше
+hb = df[df.Balance >= 100000]
+
+ct, chi2, p, V = chi2_report(
+    'HasCrCard',
+    data=hb
+)
+
+print(
+    f'\nH3 (Баланс >= 100 000, N={len(hb)}): '
+    f'без картки={hb[hb.HasCrCard==0].Exited.mean()*100:.2f}% '
+    f'vs з карткою={hb[hb.HasCrCard==1].Exited.mean()*100:.2f}% '
+    f'| хі-квадрат={chi2:.2f}, p={p:.3f}, V={V:.3f}'
+)
+
+(
+    hb.groupby('HasCrCard').Exited.mean() * 100
+).plot(
+    kind='bar',
+    color='slateblue'
+)
+
+plt.title(
+    'Високий баланс: відтік залежно від наявності кредитної картки, %'
+)
+plt.ylabel('%')
+plt.xlabel('Наявність кредитної картки')
+plt.xticks(
+    ticks=[0, 1],
+    labels=['Без кредитної картки', 'Є кредитна картка'],
+    rotation=0
+)
+plt.ylim(0, 35)
+plt.savefig('h3_churn_by_products.png', dpi=150, bbox_inches='tight')
+plt.show()
