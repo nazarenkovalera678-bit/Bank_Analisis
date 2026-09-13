@@ -1,6 +1,9 @@
-## 📄 Підготовка даних у Google Sheets
+# Підготовка даних у Google Sheets
 
 Перед імпортом даних до SQL було проведено попередню перевірку та підготовку датасету в Google Sheets.
+Джерело: публічний датасет **Churn Modelling** (10 000 записів, 14 ознак) — [посилання на таблицю](https://docs.google.com/spreadsheets/d/1IfK2tyqjaIR41xxzXfxgu-IrB26BriMxqvh1DNgup_0/edit?gid=1435083376#gid=1435083376).
+
+![Попередній перегляд датасету](dataset_preview.png)
 
 Виконані етапи:
 
@@ -19,4 +22,3 @@
    * формування SQL-записів у готовому для імпорту вигляді.
 
 Після завершення підготовки дані були готові до імпорту в базу даних без додаткової ручної обробки.
-link to the table: https://docs.google.com/spreadsheets/d/1IfK2tyqjaIR41xxzXfxgu-IrB26BriMxqvh1DNgup_0/edit?gid=1435083376#gid=1435083376
